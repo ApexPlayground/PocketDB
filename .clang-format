@@ -1,0 +1,10 @@
+BasedOnStyle: LLVM
+IndentWidth: 4
+UseTab: Never
+
+DerivePointerAlignment: false
+PointerAlignment: Left
+ReferenceAlignment: Left
+
+SeparateDefinitionBlocks: Always
+MaxEmptyLinesToKeep: 1
