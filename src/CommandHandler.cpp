@@ -2,6 +2,7 @@
 #include <algorithm>
 #include <cctype>
 #include <cstddef>
+#include <iostream>
 #include <sstream>
 #include <string>
 #include <vector>
@@ -95,11 +96,17 @@ std::string CommandHandler::processCommand(const std::string& commandLine) {
     if (tokens.empty()) {
         return "-Error: Empty command\r\n";
     }
+    for (auto& t : tokens) {
+        std::cout << t << '\n';
+    }
 
     std::string cmd = tokens[0];
 
     for (char& c : cmd) {
         c = std::toupper(c);
+    }
+    if (cmd == "PING") {
+        return "+PONG\r\n";
     }
 
     std::ostringstream response;

@@ -13,4 +13,6 @@ class Server {
     int port;
     int server_socket;
     std::atomic<bool> running;
+
+    // signal handling for shutdown
 };

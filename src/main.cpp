@@ -1,4 +1,6 @@
+#include "../include/Database.hpp"
 #include "../include/Server.hpp"
+
 #include <chrono>
 #include <iostream>
 #include <thread>
@@ -17,7 +19,12 @@ int main(int argc, char* argv[]) {
     std::thread persistenceThread([]() {
         while (true) {
             std::this_thread::sleep_for(std::chrono::seconds(300));
-            // dump the database
+
+            if (!Database::getInstance().dump("dump.rdb")) {
+                std::cerr << "Error Dumping Database\n";
+            } else {
+                std::cout << "Database Dumped to dump.rdb\n";
+            }
         }
     });
     persistenceThread.detach();
