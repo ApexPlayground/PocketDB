@@ -1,4 +1,6 @@
 #include "../include/CommandHandler.hpp"
+#include <algorithm>
+#include <cctype>
 #include <cstddef>
 #include <sstream>
 #include <string>
@@ -53,7 +55,7 @@ std::vector<std::string> parseRespCommand(const std::string& input) {
         return tokens;
     }
 
-    // Read number of elements, e.g. "*2\r\n" -> 2
+    // Read number of elements, e.g. "*2\r\n" is 2
     std::string countText = input.substr(pos, lineEnd - pos);
     int numElements = std::stoi(countText);
 
@@ -72,5 +74,35 @@ std::vector<std::string> parseRespCommand(const std::string& input) {
         }
 
         int len = std::stoi(input.substr(pos, lineEnd - pos));
+        pos = lineEnd + 2;
+
+        if (pos + len > input.size()) {
+            break;
+        }
+
+        std::string token = input.substr(pos, len);
+        tokens.push_back(token);
+        pos += len + 2;
     }
+    return tokens;
+}
+
+CommandHandler::CommandHandler() {}
+
+std::string CommandHandler::processCommand(const std::string& commandLine) {
+    auto tokens = parseRespCommand(commandLine);
+
+    if (tokens.empty()) {
+        return "-Error: Empty command\r\n";
+    }
+
+    std::string cmd = tokens[0];
+
+    for (char& c : cmd) {
+        c = std::toupper(c);
+    }
+
+    std::ostringstream response;
+    // connect to DB
+    return response.str();
 }
