@@ -1,9 +1,11 @@
 #include "../include/Server.hpp"
 #include "../include/CommandHandler.hpp"
+#include "../include/Database.hpp"
 
 #include <cstring>
 #include <iostream>
 #include <netinet/in.h>
+#include <signal.h>
 #include <sys/socket.h>
 #include <thread>
 #include <unistd.h>
@@ -11,8 +13,19 @@
 
 static Server* globalServer = nullptr;
 
+void signalHandler(int signum) {
+    if (globalServer) {
+        std::cout << "\nCaught signal " << signum << ", shutting down...\n";
+        globalServer->shutdown();
+    }
+    exit(signum);
+}
+
+void Server::setupSignalHandler() { signal(SIGINT, signalHandler); }
+
 Server::Server(int port) : port(port), server_socket(-1), running(true) {
     globalServer = this;
+    setupSignalHandler();
 }
 
 void Server::shutdown() {
@@ -94,5 +107,12 @@ void Server::run() {
         if (t.joinable()) {
             t.join();
         }
+    }
+
+    // persist db before shutdown
+    if (Database::getInstance().dump("dump.rdb")) {
+        std::cout << "Database dumped to dump.rdb\n";
+    } else {
+        std::cerr << "Error dumping database\n";
     }
 }

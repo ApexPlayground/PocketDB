@@ -1,7 +1,6 @@
 #pragma once
 
 #include <atomic>
-#include <string>
 
 class Server {
   public:
@@ -15,4 +14,5 @@ class Server {
     std::atomic<bool> running;
 
     // signal handling for shutdown
+    void setupSignalHandler();
 };

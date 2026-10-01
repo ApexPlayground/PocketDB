@@ -1,5 +1,6 @@
 #include "../include/CommandHandler.hpp"
-#include <algorithm>
+#include "../include/Database.hpp"
+
 #include <cctype>
 #include <cstddef>
 #include <iostream>
@@ -88,6 +89,8 @@ std::vector<std::string> parseRespCommand(const std::string& input) {
     return tokens;
 }
 
+//
+
 CommandHandler::CommandHandler() {}
 
 std::string CommandHandler::processCommand(const std::string& commandLine) {
@@ -96,20 +99,30 @@ std::string CommandHandler::processCommand(const std::string& commandLine) {
     if (tokens.empty()) {
         return "-Error: Empty command\r\n";
     }
-    for (auto& t : tokens) {
-        std::cout << t << '\n';
-    }
+
+    // std::cout << commandLine << "\n";
+    // for (auto& t : tokens) {
+    //     std::cout << t << '\n';
+    // }
 
     std::string cmd = tokens[0];
 
     for (char& c : cmd) {
         c = std::toupper(c);
     }
-    if (cmd == "PING") {
-        return "+PONG\r\n";
-    }
 
     std::ostringstream response;
-    // connect to DB
+
+    // setup & connect to DB
+    Database& db = Database::getInstance();
+
+    if (cmd == "PING") {
+        response << "+PONG\r\n";
+    } else if (cmd == "ECHO") {
+        // TODO..
+    } else {
+        response << "-Error: Unknown command\r\n";
+    }
+
     return response.str();
 }
