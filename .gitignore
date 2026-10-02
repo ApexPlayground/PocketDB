@@ -3,3 +3,4 @@ pocketdb
 
 test_parser
 dump.rdb
+.clang-format

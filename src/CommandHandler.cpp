@@ -89,8 +89,6 @@ std::vector<std::string> parseRespCommand(const std::string& input) {
     return tokens;
 }
 
-//
-
 CommandHandler::CommandHandler() {}
 
 std::string CommandHandler::processCommand(const std::string& commandLine) {
@@ -119,7 +117,83 @@ std::string CommandHandler::processCommand(const std::string& commandLine) {
     if (cmd == "PING") {
         response << "+PONG\r\n";
     } else if (cmd == "ECHO") {
-        // TODO..
+        if (tokens.size() < 2) {
+            response << "-Error: ECHO requires a message\r\n";
+        } else {
+            std::string message;
+
+            for (size_t i = 1; i < tokens.size(); ++i) {
+                if (i > 1) {
+                    message += " ";
+                }
+
+                message += tokens[i];
+            }
+
+            response << "+" << message << "\r\n";
+        }
+    } else if (cmd == "FLUSHALL") {
+        db.flushAll();
+        response << "+OK\r\n";
+    } else if (cmd == "SET") {
+
+        if (tokens.size() < 3) {
+            response << "-Error: SET requires key and values\r\n";
+        } else {
+            db.set(tokens[1], tokens[2]);
+            response << "+OK\r\n";
+        }
+
+    } else if (cmd == "GET") {
+        if (tokens.size() < 2) {
+            response << "-Error: GET requires key\r\n";
+        } else {
+            std::string value;
+
+            if (db.get(tokens[1], value)) {
+                response << "$" << value.size() << "\r\n" << value << "\r\n";
+            } else {
+                response << "$-1\r\n";
+            }
+        }
+
+    } else if (cmd == "KEYS") {
+        std::vector<std::string> allKeys = db.keys();
+        response << "*" << allKeys.size() << "\r\n";
+        for (const auto& key : allKeys) {
+            response << "$" << key.size() << "\r\n" << key << "\r\n";
+        }
+    } else if (cmd == "TYPE") {
+        if (tokens.size() < 2) {
+            response << "-Error: TYPE requires key\r\n";
+        } else {
+            response << "+" << db.type(tokens[1]) << "\r\n";
+        }
+    } else if (cmd == "DEL" || cmd == "UNLINK") {
+        if (tokens.size() < 2) {
+            response << "-Error: " << cmd << "requires key\r\n";
+        } else {
+            bool res = db.del(tokens[1]);
+            response << ":" << (res ? 1 : 0) << "\r\n";
+        }
+    } else if (cmd == "EXPIRE") {
+        if (tokens.size() < 3) {
+            response << "-Error: EXPIRE requires key and time in seconds\r\n";
+        } else {
+            if (db.expire(tokens[1], std::stoi(tokens[2]))) {
+                response << "+OK\r\n";
+            }
+        }
+
+    } else if (cmd == "RENAME") {
+        if (tokens.size() < 3) {
+            response
+                << "-Error: RENAME requres old key name and new key name\r\n";
+        } else {
+            if (db.rename(tokens[1], tokens[2])) {
+                response << "+OK\r\n";
+            }
+        }
     } else {
         response << "-Error: Unknown command\r\n";
     }

@@ -9,6 +9,32 @@ Database& Database::getInstance() {
     return instance;
 }
 
+// Common Comands
+bool Database::flushAll() {
+    std::lock_guard<std::mutex> lock(db_mutex);
+    kv_store.clear();
+    list_store.clear();
+    hash_store.clear();
+    return true;
+}
+
+// Key/Value Operations
+void Database::set(const std::string& key, const std::string& value) {
+    std::lock_guard<std::mutex> lock(db_mutex);
+    kv_store[key] = value;
+}
+
+bool Database::get(const std::string& key, std::string& value) {
+    std::lock_guard<std::mutex> lock(db_mutex);
+    // purgeExpired();
+    auto it = kv_store.find(key);
+    if (it != kv_store.end()) {
+        value = it->second;
+        return true;
+    }
+    return false;
+}
+
 bool Database::dump(const std::string& filename) {
     std::lock_guard<std::mutex> lock(db_mutex);
 
