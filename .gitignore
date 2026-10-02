@@ -1,2 +1,5 @@
 build/
 pocketdb
+
+test_parser
+dump.rdb
