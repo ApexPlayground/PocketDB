@@ -1,8 +1,12 @@
 #include "../include/Database.hpp"
 
+#include <chrono>
 #include <fstream>
 #include <iomanip>
+#include <mutex>
 #include <sstream>
+#include <string>
+#include <vector>
 
 Database& Database::getInstance() {
     static Database instance;
@@ -33,6 +37,101 @@ bool Database::get(const std::string& key, std::string& value) {
         return true;
     }
     return false;
+}
+
+std::vector<std::string> Database::keys() {
+    std::lock_guard<std::mutex> lock(db_mutex);
+    std::vector<std::string> result;
+
+    for (const auto& pair : kv_store) {
+        result.push_back(pair.first);
+    }
+    for (const auto& pair : list_store) {
+        result.push_back(pair.first);
+    }
+    for (const auto& pair : hash_store) {
+        result.push_back(pair.first);
+    }
+
+    return result;
+}
+
+std::string Database::type(const std::string& key) {
+    std::lock_guard<std::mutex> lock(db_mutex);
+    purgeExpired();
+    if (kv_store.find(key) != kv_store.end())
+        return "string";
+    if (list_store.find(key) != list_store.end())
+        return "list";
+    if (hash_store.find(key) != hash_store.end())
+        return "hash";
+    else
+        return "none";
+}
+
+bool Database::del(const std::string& key) {
+    std::lock_guard<std::mutex> lock(db_mutex);
+    purgeExpired();
+    bool erased = false;
+    erased |= kv_store.erase(key) > 0;
+    erased |= list_store.erase(key) > 0;
+    erased |= hash_store.erase(key) > 0;
+    return erased;
+}
+
+bool Database::expire(const std::string& key, int seconds) {
+    std::lock_guard<std::mutex> lock(db_mutex);
+    // purgeExpired();
+    bool exist = (kv_store.find(key) != kv_store.end()) ||
+                 (list_store.find(key) != list_store.end()) ||
+                 (hash_store.find(key) != hash_store.end());
+
+    if (!exist) {
+        return false;
+    }
+
+    expiry_map[key] =
+        std::chrono::steady_clock::now() + std::chrono::seconds(seconds);
+    return true;
+}
+
+void Database::purgeExpired() {}
+
+bool Database::rename(const std::string& oldKey, const std::string& newKey) {
+    std::lock_guard<std::mutex> lock(db_mutex);
+
+    // purgeExpired();
+    bool found = false;
+
+    // find the old key and tranfer it values top the new key
+    auto itKv = kv_store.find(oldKey);
+    if (itKv != kv_store.end()) {
+        kv_store[newKey] = itKv->second;
+        kv_store.erase(itKv);
+        found = true;
+    }
+
+    auto itList = list_store.find(oldKey);
+    if (itList != list_store.end()) {
+        list_store[newKey] = itList->second;
+        list_store.erase(itList);
+        found = true;
+    }
+
+    auto itHash = hash_store.find(oldKey);
+    if (itHash != hash_store.end()) {
+        hash_store[newKey] = itHash->second;
+        hash_store.erase(itHash);
+        found = true;
+    }
+
+    auto itExpire = expiry_map.find(oldKey);
+    if (itExpire != expiry_map.end()) {
+        expiry_map[newKey] = itExpire->second;
+        expiry_map.erase(itExpire);
+    }
+
+    return found;
 }
 
 bool Database::dump(const std::string& filename) {

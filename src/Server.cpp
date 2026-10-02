@@ -35,7 +35,13 @@ void Server::shutdown() {
         close(server_socket);
     }
 
-    std::cout << "Server Shutdown Completed";
+    if (Database::getInstance().dump("dump.rdb")) {
+        std::cout << "Database dumped to dump.rdb\n";
+    } else {
+        std::cerr << "Error dumping database\n";
+    }
+
+    std::cout << "Server Shutdown Completed\n";
 }
 
 void Server::run() {

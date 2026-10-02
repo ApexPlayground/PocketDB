@@ -2,5 +2,10 @@ build/
 pocketdb
 
 test_parser
+test_commands
+
 dump.rdb
+
 .clang-format
+
+Notes.txt

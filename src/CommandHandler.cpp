@@ -171,7 +171,7 @@ std::string CommandHandler::processCommand(const std::string& commandLine) {
         }
     } else if (cmd == "DEL" || cmd == "UNLINK") {
         if (tokens.size() < 2) {
-            response << "-Error: " << cmd << "requires key\r\n";
+            response << "-Error: " << cmd << " requires key\r\n";
         } else {
             bool res = db.del(tokens[1]);
             response << ":" << (res ? 1 : 0) << "\r\n";

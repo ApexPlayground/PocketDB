@@ -11,6 +11,11 @@ int main(int argc, char* argv[]) {
     if (argc >= 2) {
         port = std::stoi(argv[1]); // user specific port
     }
+    if (Database::getInstance().load("dump.rdb"))
+        std::cout << "Database Loaded From dump.rdb\n";
+    else
+        std::cout << "No dump found or load failed; starting with an empty "
+                     "database.\n";
 
     Server server(port);
 
