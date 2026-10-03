@@ -3,9 +3,9 @@
 
 #include <cctype>
 #include <cstddef>
-#include <iostream>
 #include <sstream>
 #include <string>
+#include <sys/types.h>
 #include <vector>
 
 // RESP parser
@@ -89,7 +89,180 @@ std::vector<std::string> parseRespCommand(const std::string& input) {
     return tokens;
 }
 
-CommandHandler::CommandHandler() {}
+//--------------------COMMON COMMANDS--------------------
+
+// ping command
+static std::string handlePing(const std::vector<std::string>& tokens,
+                              Database&) {
+    return "+PONG\r\n";
+}
+
+// echo command
+static std::string handleEcho(const std::vector<std::string>& tokens,
+                              Database&) {
+    if (tokens.size() < 2) {
+        return "-Error: ECHO requires a message\r\n";
+    }
+
+    std::string message;
+
+    for (size_t i = 1; i < tokens.size(); ++i) {
+        if (i > 1) {
+            message += " ";
+        }
+
+        message += tokens[i];
+    }
+
+    return "+" + message + "\r\n";
+}
+
+// flushall command
+static std::string handleFlushAll(const std::vector<std::string>& tokens,
+                                  Database& db) {
+    db.flushAll();
+    return "+OK\r\n";
+}
+
+//--------------------KEY/VALUE COMMANDS--------------------
+
+// set command
+static std::string handleSet(const std::vector<std::string>& tokens,
+                             Database& db) {
+    if (tokens.size() < 3) {
+        return "-Error: SET requires key and values\r\n";
+    }
+
+    db.set(tokens[1], tokens[2]);
+    return "+OK\r\n";
+}
+
+// get command
+static std::string handleGet(const std::vector<std::string>& tokens,
+                             Database& db) {
+    if (tokens.size() < 2) {
+        return "-Error: GET requires key\r\n";
+    }
+
+    std::string value;
+
+    if (db.get(tokens[1], value)) {
+        return "$" + std::to_string(value.size()) + "\r\n" + value + "\r\n";
+    }
+
+    return "$-1\r\n";
+}
+
+// keys command
+static std::string handleKeys(const std::vector<std::string>& tokens,
+                              Database& db) {
+
+    std::vector<std::string> allKeys = db.keys();
+
+    std::string response = "*" + std::to_string(allKeys.size()) + "\r\n";
+
+    for (const auto& key : allKeys) {
+        response += "$" + std::to_string(key.size()) + "\r\n" + key + "\r\n";
+    }
+
+    return response;
+}
+
+// type command
+static std::string handleType(const std::vector<std::string>& tokens,
+                              Database& db) {
+    if (tokens.size() < 2) {
+        return "-Error: TYPE requires key\r\n";
+    }
+    return "+" + db.type(tokens[1]) + "\r\n";
+}
+
+// delete or unlink command
+static std::string handleDeleteOrUnlink(const std::vector<std::string>& tokens,
+                                        Database& db) {
+    if (tokens.size() < 2) {
+        return "-Error: " + tokens[0] + " requires key\r\n";
+    }
+
+    bool res = db.del(tokens[1]);
+
+    return ":" + std::to_string(res ? 1 : 0) + "\r\n";
+}
+
+// expire command
+static std::string handleExpire(const std::vector<std::string>& tokens,
+                                Database& db) {
+    if (tokens.size() < 3) {
+        return "-Error: EXPIRE requires key and time in seconds\r\n";
+    }
+
+    try {
+        int seconds = std::stoi(tokens[2]);
+
+        if (db.expire(tokens[1], seconds)) {
+            return "+OK\r\n";
+        }
+
+        return "-Error: Key not found\r\n";
+
+    } catch (const std::exception&) {
+        return "-Error: Invalid expiration time\r\n";
+    }
+}
+
+// rename command
+static std::string handleRename(const std::vector<std::string>& tokens,
+                                Database& db) {
+    if (tokens.size() < 3)
+        return "-Error: RENAME requires old key and new key\r\n";
+    if (db.rename(tokens[1], tokens[2]))
+        return "+OK\r\n";
+    return "-Error: Key not found or rename failed\r\n";
+}
+
+//--------------------LIST COMMANDS--------------------
+
+// list length command
+static std::string handleListLength(const std::vector<std::string>& tokens,
+                                    Database& db) {
+    if (tokens.size() < 2) {
+        return "-Error: LLEN requires Key\r\n";
+    }
+    ssize_t len = db.llen(tokens[1]);
+    return ":" + std::to_string(len) + "\r\n";
+}
+
+// get list values command
+static std::string handleListGet(const std::vector<std::string>& tokens,
+                                 Database& db) {}
+
+// push value to the left of the list
+static std::string handleLeftPush(const std::vector<std::string>& tokens,
+                                  Database& db) {}
+
+// push value to the right of the list
+static std::string handleRightPush(const std::vector<std::string>& tokens,
+                                   Database& db) {}
+
+// remove value from the left of the list
+static std::string handleLeftPop(const std::vector<std::string>& tokens,
+                                 Database& db) {}
+
+// remove value from the right of the list
+static std::string handleRightPop(const std::vector<std::string>& tokens,
+                                  Database& db) {}
+
+// remove matching values from the list
+static std::string handleListRemove(const std::vector<std::string>& tokens,
+                                    Database& db) {}
+
+// get value at a list index
+static std::string handleListIndex(const std::vector<std::string>& tokens,
+                                   Database& db) {}
+
+// replace value at a list index
+static std::string handleListSet(const std::vector<std::string>& tokens,
+                                 Database& db) {}
 
 std::string CommandHandler::processCommand(const std::string& commandLine) {
     auto tokens = parseRespCommand(commandLine);
@@ -98,105 +271,54 @@ std::string CommandHandler::processCommand(const std::string& commandLine) {
         return "-Error: Empty command\r\n";
     }
 
-    // std::cout << commandLine << "\n";
-    // for (auto& t : tokens) {
-    //     std::cout << t << '\n';
-    // }
-
     std::string cmd = tokens[0];
 
     for (char& c : cmd) {
         c = std::toupper(c);
     }
 
-    std::ostringstream response;
-
-    // setup & connect to DB
+    // Get the shared database instance
     Database& db = Database::getInstance();
 
     if (cmd == "PING") {
-        response << "+PONG\r\n";
+        return handlePing(tokens, db);
     } else if (cmd == "ECHO") {
-        if (tokens.size() < 2) {
-            response << "-Error: ECHO requires a message\r\n";
-        } else {
-            std::string message;
-
-            for (size_t i = 1; i < tokens.size(); ++i) {
-                if (i > 1) {
-                    message += " ";
-                }
-
-                message += tokens[i];
-            }
-
-            response << "+" << message << "\r\n";
-        }
+        return handleEcho(tokens, db);
     } else if (cmd == "FLUSHALL") {
-        db.flushAll();
-        response << "+OK\r\n";
+        return handleFlushAll(tokens, db);
     } else if (cmd == "SET") {
-
-        if (tokens.size() < 3) {
-            response << "-Error: SET requires key and values\r\n";
-        } else {
-            db.set(tokens[1], tokens[2]);
-            response << "+OK\r\n";
-        }
-
+        return handleSet(tokens, db);
     } else if (cmd == "GET") {
-        if (tokens.size() < 2) {
-            response << "-Error: GET requires key\r\n";
-        } else {
-            std::string value;
-
-            if (db.get(tokens[1], value)) {
-                response << "$" << value.size() << "\r\n" << value << "\r\n";
-            } else {
-                response << "$-1\r\n";
-            }
-        }
-
+        return handleGet(tokens, db);
     } else if (cmd == "KEYS") {
-        std::vector<std::string> allKeys = db.keys();
-        response << "*" << allKeys.size() << "\r\n";
-        for (const auto& key : allKeys) {
-            response << "$" << key.size() << "\r\n" << key << "\r\n";
-        }
+        return handleKeys(tokens, db);
     } else if (cmd == "TYPE") {
-        if (tokens.size() < 2) {
-            response << "-Error: TYPE requires key\r\n";
-        } else {
-            response << "+" << db.type(tokens[1]) << "\r\n";
-        }
+        return handleType(tokens, db);
     } else if (cmd == "DEL" || cmd == "UNLINK") {
-        if (tokens.size() < 2) {
-            response << "-Error: " << cmd << " requires key\r\n";
-        } else {
-            bool res = db.del(tokens[1]);
-            response << ":" << (res ? 1 : 0) << "\r\n";
-        }
+        return handleDeleteOrUnlink(tokens, db);
     } else if (cmd == "EXPIRE") {
-        if (tokens.size() < 3) {
-            response << "-Error: EXPIRE requires key and time in seconds\r\n";
-        } else {
-            if (db.expire(tokens[1], std::stoi(tokens[2]))) {
-                response << "+OK\r\n";
-            }
-        }
-
+        return handleExpire(tokens, db);
     } else if (cmd == "RENAME") {
-        if (tokens.size() < 3) {
-            response
-                << "-Error: RENAME requres old key name and new key name\r\n";
-        } else {
-            if (db.rename(tokens[1], tokens[2])) {
-                response << "+OK\r\n";
-            }
-        }
+        return handleRename(tokens, db);
+    } else if (cmd == "LLEN") {
+        return handleListLength(tokens, db);
+    } else if (cmd == "LRANGE") {
+        return handleListGet(tokens, db);
+    } else if (cmd == "LPUSH") {
+        return handleLeftPush(tokens, db);
+    } else if (cmd == "RPUSH") {
+        return handleRightPush(tokens, db);
+    } else if (cmd == "LPOP") {
+        return handleLeftPop(tokens, db);
+    } else if (cmd == "RPOP") {
+        return handleRightPop(tokens, db);
+    } else if (cmd == "LREM") {
+        return handleListRemove(tokens, db);
+    } else if (cmd == "LINDEX") {
+        return handleListIndex(tokens, db);
+    } else if (cmd == "LSET") {
+        return handleListSet(tokens, db);
     } else {
-        response << "-Error: Unknown command\r\n";
+        return "-Error: Unknown command\r\n";
     }
-
-    return response.str();
 }

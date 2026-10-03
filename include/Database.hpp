@@ -21,6 +21,16 @@ class Database {
     void purgeExpired();
     bool rename(const std::string& oldKey, const std::string& newKey);
 
+    // DB list commands
+    ssize_t llen(const std::string& key);
+    void lpush(const std::string& key, const std::string& value);
+    void rpush(const std::string& key, const std::string& value);
+    bool lpop(const std::string& key, std::string& value);
+    bool rpop(const std::string& key, std::string& value);
+    int lrem(const std::string& key, int count, const std::string& value);
+    bool lindex(const std::string& key, int index, std::string& value);
+    bool lset(const std::string& key, int index, const std::string& value);
+
     // Dump / load DB for persistence
     bool dump(const std::string& filename);
     bool load(const std::string& filename);

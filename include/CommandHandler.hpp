@@ -4,7 +4,7 @@
 
 class CommandHandler {
   public:
-    CommandHandler();
+    CommandHandler() = default;
     // Process command from client and return RESP-formatted response.
     std::string processCommand(const std::string& commandLine);
 };
