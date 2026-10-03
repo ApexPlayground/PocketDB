@@ -89,6 +89,17 @@ std::vector<std::string> parseRespCommand(const std::string& input) {
     return tokens;
 }
 
+/**
+
+Helper note:
+: means integer response
+$ means bulk string response
++ means simple string response
+- means error
+* means array
+
+*/
+
 //--------------------COMMON COMMANDS--------------------
 
 // ping command
@@ -233,36 +244,151 @@ static std::string handleListLength(const std::vector<std::string>& tokens,
 }
 
 // get list values command
-static std::string handleListGet(const std::vector<std::string>& tokens,
-                                 Database& db) {}
+static std::string handleListRange(const std::vector<std::string>& tokens,
+                                   Database& db) {
+    if (tokens.size() < 4) {
+        return "-Error: LRANGE requires key, start and stop\r\n";
+    }
+
+    try {
+        int start = std::stoi(tokens[2]);
+        int stop = std::stoi(tokens[3]);
+
+        auto elems = db.lrange(tokens[1], start, stop);
+
+        std::string response;
+        response += "*" + std::to_string(elems.size()) + "\r\n";
+
+        for (const auto& e : elems) {
+            response += "$" + std::to_string(e.size()) + "\r\n";
+            response += e + "\r\n";
+        }
+
+        return response;
+
+    } catch (const std::exception&) {
+        return "-Error: Invalid range\r\n";
+    }
+}
 
 // push value to the left of the list
 static std::string handleLeftPush(const std::vector<std::string>& tokens,
-                                  Database& db) {}
+                                  Database& db) {
+    if (tokens.size() < 3) {
+        return "-Error: LPUSH requires key and value\r\n";
+    }
+
+    for (size_t i = 2; i < tokens.size(); i++) {
+        db.lpush(tokens[1], tokens[i]);
+    }
+
+    ssize_t len = db.llen(tokens[1]);
+
+    return ":" + std::to_string(len) + "\r\n";
+}
 
 // push value to the right of the list
 static std::string handleRightPush(const std::vector<std::string>& tokens,
-                                   Database& db) {}
+                                   Database& db) {
+    if (tokens.size() < 3) {
+        return "-Error: RPUSH requires key and value\r\n";
+    }
+
+    for (size_t i = 2; i < tokens.size(); ++i) {
+        db.rpush(tokens[1], tokens[i]);
+    }
+
+    ssize_t len = db.llen(tokens[1]);
+
+    return ":" + std::to_string(len) + "\r\n";
+}
 
 // remove value from the left of the list
 static std::string handleLeftPop(const std::vector<std::string>& tokens,
-                                 Database& db) {}
+                                 Database& db) {
+    if (tokens.size() < 2) {
+        return "-Error: LPOP requires key\r\n";
+    }
+    std::string val;
+    if (db.lpop(tokens[1], val))
+        return "$" + std::to_string(val.size()) + "\r\n" + val + "\r\n";
+    return "$-1\r\n";
+}
 
 // remove value from the right of the list
 static std::string handleRightPop(const std::vector<std::string>& tokens,
-                                  Database& db) {}
+                                  Database& db) {
+    if (tokens.size() < 2) {
+        return "-Error: RPOP requires key\r\n";
+    }
+    std::string val;
+    if (db.rpop(tokens[1], val))
+        return "$" + std::to_string(val.size()) + "\r\n" + val + "\r\n";
+    return "$-1\r\n";
+}
 
 // remove matching values from the list
 static std::string handleListRemove(const std::vector<std::string>& tokens,
-                                    Database& db) {}
+                                    Database& db) {
+    if (tokens.size() < 4) {
+        return "-Error: LREM requires key, count and value\r\n";
+    }
+
+    try {
+        int count = std::stoi(tokens[2]);
+        std::string value = tokens[3];
+
+        int removed = db.lrem(tokens[1], count, value);
+
+        return ":" + std::to_string(removed) + "\r\n";
+
+    } catch (const std::exception&) {
+        return "-Error: Invalid count\r\n";
+    }
+}
 
 // get value at a list index
 static std::string handleListIndex(const std::vector<std::string>& tokens,
-                                   Database& db) {}
+                                   Database& db) {
+    if (tokens.size() < 3) {
+        return "-Error: LINDEX requires key and index\r\n";
+    }
+
+    try {
+        int index = std::stoi(tokens[2]);
+        std::string value;
+
+        if (db.lindex(tokens[1], index, value)) {
+            return "$" + std::to_string(value.size()) + "\r\n" + value + "\r\n";
+        }
+
+        return "$-1\r\n";
+
+    } catch (const std::exception&) {
+        return "-Error: Invalid index\r\n";
+    }
+}
 
 // replace value at a list index
 static std::string handleListSet(const std::vector<std::string>& tokens,
-                                 Database& db) {}
+                                 Database& db) {
+    if (tokens.size() < 4) {
+        return "-Error: LSET requires key, index and value\r\n";
+    }
+
+    try {
+        int index = std::stoi(tokens[2]);
+
+        if (db.lset(tokens[1], index, tokens[3])) {
+            return "+OK\r\n";
+        }
+
+        return "-Error: Index out of range\r\n";
+
+    } catch (const std::exception&) {
+        return "-Error: Invalid index\r\n";
+    }
+}
 
 std::string CommandHandler::processCommand(const std::string& commandLine) {
     auto tokens = parseRespCommand(commandLine);
@@ -303,7 +429,7 @@ std::string CommandHandler::processCommand(const std::string& commandLine) {
     } else if (cmd == "LLEN") {
         return handleListLength(tokens, db);
     } else if (cmd == "LRANGE") {
-        return handleListGet(tokens, db);
+        return handleListRange(tokens, db);
     } else if (cmd == "LPUSH") {
         return handleLeftPush(tokens, db);
     } else if (cmd == "RPUSH") {

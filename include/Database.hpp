@@ -22,6 +22,8 @@ class Database {
     bool rename(const std::string& oldKey, const std::string& newKey);
 
     // DB list commands
+    std::vector<std::string> lrange(const std::string& key, int start,
+                                    int stop);
     ssize_t llen(const std::string& key);
     void lpush(const std::string& key, const std::string& value);
     void rpush(const std::string& key, const std::string& value);
