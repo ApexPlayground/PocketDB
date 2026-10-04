@@ -22,7 +22,7 @@ bool Database::flushAll() {
     return true;
 }
 
-// Key/Value Operations
+// ---------------------Key/Value Operations---------------------
 void Database::set(const std::string& key, const std::string& value) {
     std::lock_guard<std::mutex> lock(db_mutex);
     kv_store[key] = value;
@@ -132,6 +132,184 @@ bool Database::rename(const std::string& oldKey, const std::string& newKey) {
     }
 
     return found;
+}
+
+// ---------------------list Operations---------------------
+ssize_t Database::llen(const std::string& key) {
+    std::lock_guard<std::mutex> lock(db_mutex);
+    auto it = list_store.find(key);
+    if (it != list_store.end()) {
+        return it->second.size();
+    }
+
+    return 0;
+}
+
+std::vector<std::string> Database::lrange(const std::string& key, int start,
+                                          int stop) {
+    std::lock_guard<std::mutex> lock(db_mutex);
+
+    auto it = list_store.find(key);
+
+    if (it == list_store.end()) {
+        return {};
+    }
+
+    const auto& list = it->second;
+    int size = static_cast<int>(list.size());
+
+    if (start < 0)
+        start = size + start;
+
+    if (stop < 0)
+        stop = size + stop;
+
+    if (start < 0)
+        start = 0;
+
+    if (stop >= size)
+        stop = size - 1;
+
+    if (start >= size || start > stop) {
+        return {};
+    }
+
+    std::vector<std::string> result;
+
+    for (int i = start; i <= stop; i++) {
+        result.push_back(list[i]);
+    }
+
+    return result;
+}
+
+void Database::lpush(const std::string& key, const std::string& value) {
+    std::lock_guard<std::mutex> lock(db_mutex);
+
+    list_store[key].insert(list_store[key].begin(), value);
+}
+
+void Database::rpush(const std::string& key, const std::string& value) {
+    std::lock_guard<std::mutex> lock(db_mutex);
+
+    list_store[key].push_back(value);
+}
+
+bool Database::lpop(const std::string& key, std::string& value) {
+    std::lock_guard<std::mutex> lock(db_mutex);
+    auto it = list_store.find(key);
+
+    if (it != list_store.end() && !it->second.empty()) {
+        value = it->second.front();
+        it->second.erase(it->second.begin());
+        return true;
+    }
+    return false;
+}
+
+bool Database::rpop(const std::string& key, std::string& value) {
+    std::lock_guard<std::mutex> lock(db_mutex);
+    auto it = list_store.find(key);
+
+    if (it != list_store.end() && !it->second.empty()) {
+        value = it->second.back();
+        it->second.pop_back();
+        return true;
+    }
+    return false;
+}
+
+int Database::lrem(const std::string& key, int count,
+                   const std::string& value) {
+    std::lock_guard<std::mutex> lock(db_mutex);
+
+    auto it = list_store.find(key);
+
+    if (it == list_store.end())
+        return 0;
+
+    auto& list = it->second;
+    int removed = 0;
+
+    // Remove all matches
+    if (count == 0) {
+        for (auto iter = list.begin(); iter != list.end();) {
+            if (*iter == value) {
+                iter = list.erase(iter);
+                removed++;
+            } else {
+                iter++;
+            }
+        }
+    }
+
+    // Remove from left to right
+    else if (count > 0) {
+        for (auto iter = list.begin(); iter != list.end() && removed < count;) {
+
+            if (*iter == value) {
+                iter = list.erase(iter);
+                removed++;
+            } else {
+                iter++;
+            }
+        }
+    }
+
+    // Remove from right to left
+    else {
+        for (int i = static_cast<int>(list.size()) - 1;
+             i >= 0 && removed < -count; i--) {
+
+            if (list[i] == value) {
+                list.erase(list.begin() + i);
+                ++removed;
+            }
+        }
+    }
+
+    return removed;
+}
+
+bool Database::lindex(const std::string& key, int index, std::string& value) {
+    std::lock_guard<std::mutex> lock(db_mutex);
+    auto it = list_store.find(key);
+    if (it == list_store.end()) {
+        return false;
+    }
+
+    const auto& lst = it->second;
+    if (index < 0) {
+        index = lst.size() + index;
+    }
+
+    if (index < 0 || index >= static_cast<int>(lst.size())) {
+        return false;
+    }
+
+    value = lst[index];
+    return true;
+}
+
+bool Database::lset(const std::string& key, int index,
+                    const std::string& value) {
+    std::lock_guard<std::mutex> lock(db_mutex);
+    auto it = list_store.find(key);
+    if (it == list_store.end()) {
+        return false;
+    }
+
+    auto& lst = it->second;
+    if (index < 0) {
+        index = lst.size() + index;
+    }
+
+    if (index < 0 || index >= static_cast<int>(lst.size())) {
+        return false;
+    }
+
+    lst[index] = value;
+    return true;
 }
 
 bool Database::dump(const std::string& filename) {
