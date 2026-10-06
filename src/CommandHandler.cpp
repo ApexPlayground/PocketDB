@@ -390,6 +390,63 @@ static std::string handleListSet(const std::vector<std::string>& tokens,
     }
 }
 
+//--------------------HASH COMMANDS--------------------
+
+static std::string handleHset(const std::vector<std::string>& tokens,
+                              Database& db) {
+    if (tokens.size() < 4) {
+        return "-Error: HSET requires key, field and value\r\n";
+    }
+
+    db.hset(tokens[1], tokens[2], tokens[3]);
+    return ":1\r\n";
+}
+
+static std::string handleHget(const std::vector<std::string>& tokens,
+                              Database& db) {
+    if (tokens.size() < 3) {
+        return "-Error: HGET requires key and field\r\n";
+    }
+    std::string value;
+    if (db.hget(tokens[1], tokens[2], value)) {
+        return "$" + std::to_string(value.size()) + "\r\n" + value + "\r\n";
+    }
+    return "$-1\r\n";
+}
+
+static std::string handleHexists(const std::vector<std::string>& tokens,
+                                 Database& db) {
+    if (tokens.size() < 3) {
+        return "-Error: HEXISTS requires key and field\r\n";
+    }
+    bool exists = db.hexists(tokens[1], tokens[2]);
+    return ":" + std::to_string(exists ? 1 : 0) + "\r\n";
+}
+
+static std::string handleHdel(const std::vector<std::string>& tokens,
+                              Database& db) {
+    if (tokens.size() < 3) {
+        return "-Error: HDEL requires key and field\r\n";
+    }
+    bool res = db.hdel(tokens[1], tokens[2]);
+    return ":" + std::to_string(res ? 1 : 0) + "\r\n";
+}
+
+static std::string handleHgetall(const std::vector<std::string>& tokens,
+                                 Database& db) {}
+
+static std::string handleHkeys(const std::vector<std::string>& tokens,
+                               Database& db) {}
+
+static std::string handleHvals(const std::vector<std::string>& tokens,
+                               Database& db) {}
+
+static std::string handleHlen(const std::vector<std::string>& tokens,
+                              Database& db) {}
+
+static std::string handleHmset(const std::vector<std::string>& tokens,
+                               Database& db) {}
+
 std::string CommandHandler::processCommand(const std::string& commandLine) {
     auto tokens = parseRespCommand(commandLine);
 
@@ -444,6 +501,24 @@ std::string CommandHandler::processCommand(const std::string& commandLine) {
         return handleListIndex(tokens, db);
     } else if (cmd == "LSET") {
         return handleListSet(tokens, db);
+    } else if (cmd == "HSET") {
+        return handleHset(tokens, db);
+    } else if (cmd == "HGET") {
+        return handleHget(tokens, db);
+    } else if (cmd == "HEXISTS")
+        return handleHexists(tokens, db);
+    else if (cmd == "HDEL") {
+        return handleHdel(tokens, db);
+    } else if (cmd == "HGETALL") {
+        return handleHgetall(tokens, db);
+    } else if (cmd == "HKEYS") {
+        return handleHkeys(tokens, db);
+    } else if (cmd == "HVALS") {
+        return handleHvals(tokens, db);
+    } else if (cmd == "HLEN") {
+        return handleHlen(tokens, db);
+    } else if (cmd == "HMSET") {
+        return handleHmset(tokens, db);
     } else {
         return "-Error: Unknown command\r\n";
     }

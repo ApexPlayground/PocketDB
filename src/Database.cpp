@@ -312,6 +312,69 @@ bool Database::lset(const std::string& key, int index,
     return true;
 }
 
+// ---------------------hash Operations---------------------
+bool Database::hset(const std::string& key, const std::string& field,
+                    const std::string& value) {
+    std::lock_guard<std::mutex> lock(db_mutex);
+    hash_store[key][field] = value;
+    return true;
+}
+
+bool Database::hget(const std::string& key, const std::string& field,
+                    std::string& value) {
+    std::lock_guard<std::mutex> lock(db_mutex);
+
+    // find key in hash store
+    auto hashIt = hash_store.find(key);
+
+    if (hashIt == hash_store.end()) {
+        return false;
+    }
+
+    auto& fields = hashIt->second;
+    // if key is found, Get the inner hashmap for this key and find field
+    auto fieldIt = fields.find(field);
+
+    if (fieldIt == fields.end()) {
+        return false;
+    }
+    // Store the field value in the output reference
+    value = fieldIt->second;
+    return true;
+}
+
+bool Database::hexists(const std::string& key, const std::string& field) {
+    std::lock_guard<std::mutex> lock(db_mutex);
+    auto it = hash_store.find(key);
+
+    if (it == hash_store.end()) {
+        return false;
+    }
+
+    return it->second.find(field) != it->second.end();
+}
+
+bool Database::hdel(const std::string& key, const std::string& field) {
+    std::lock_guard<std::mutex> lock(db_mutex);
+    auto it = hash_store.find(key);
+    if (it != hash_store.end()) {
+        return it->second.erase(field) > 0;
+    }
+}
+
+std::unordered_map<std::string, std::string>
+Database::hgetall(const std::string& key) {}
+
+std::vector<std::string> Database::hkeys(const std::string& key) {}
+
+std::vector<std::string> Database::hvals(const std::string& key) {}
+
+ssize_t Database::hlen(const std::string& key) {}
+
+bool Database::hmset(
+    const std::string& key,
+    const std::vector<std::pair<std::string, std::string>>& fieldValues) {}
+
 bool Database::dump(const std::string& filename) {
     std::lock_guard<std::mutex> lock(db_mutex);
 
