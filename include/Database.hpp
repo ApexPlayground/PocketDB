@@ -18,7 +18,7 @@ class Database {
     std::string type(const std::string& key);
     bool del(const std::string& key);
     bool expire(const std::string& key, int seconds);
-    void purgeExpired();
+    bool isExpired(const std::string& key);
     bool rename(const std::string& oldKey, const std::string& newKey);
 
     // DB list commands
@@ -34,8 +34,9 @@ class Database {
     bool lset(const std::string& key, int index, const std::string& value);
 
     // DB Hash commands
-    bool hset(const std::string& key, const std::string& field,
-              const std::string& value);
+    bool
+    hset(const std::string& key,
+         const std::vector<std::pair<std::string, std::string>>& fieldValue);
     bool hget(const std::string& key, const std::string& field,
               std::string& value);
     bool hexists(const std::string& key, const std::string& field);
@@ -44,7 +45,7 @@ class Database {
     hgetall(const std::string& key);
     std::vector<std::string> hkeys(const std::string& key);
     std::vector<std::string> hvals(const std::string& key);
-    ssize_t hlen(const std::string& key);
+    size_t hlen(const std::string& key);
     bool
     hmset(const std::string& key,
           const std::vector<std::pair<std::string, std::string>>& fieldValues);

@@ -398,7 +398,7 @@ static std::string handleHset(const std::vector<std::string>& tokens,
         return "-Error: HSET requires key, field and value\r\n";
     }
 
-    db.hset(tokens[1], tokens[2], tokens[3]);
+    db.hset(tokens[1], {{tokens[2], tokens[3]}});
     return ":1\r\n";
 }
 

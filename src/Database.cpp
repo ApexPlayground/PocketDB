@@ -6,6 +6,7 @@
 #include <mutex>
 #include <sstream>
 #include <string>
+#include <utility>
 #include <vector>
 
 Database& Database::getInstance() {
@@ -30,7 +31,9 @@ void Database::set(const std::string& key, const std::string& value) {
 
 bool Database::get(const std::string& key, std::string& value) {
     std::lock_guard<std::mutex> lock(db_mutex);
-    // purgeExpired();
+    if (isExpired(key)) {
+        return false;
+    }
     auto it = kv_store.find(key);
     if (it != kv_store.end()) {
         value = it->second;
@@ -58,7 +61,9 @@ std::vector<std::string> Database::keys() {
 
 std::string Database::type(const std::string& key) {
     std::lock_guard<std::mutex> lock(db_mutex);
-    purgeExpired();
+    if (isExpired(key)) {
+        return "none";
+    }
     if (kv_store.find(key) != kv_store.end())
         return "string";
     if (list_store.find(key) != list_store.end())
@@ -71,7 +76,9 @@ std::string Database::type(const std::string& key) {
 
 bool Database::del(const std::string& key) {
     std::lock_guard<std::mutex> lock(db_mutex);
-    purgeExpired();
+    if (isExpired(key)) {
+        return false;
+    }
     bool erased = false;
     erased |= kv_store.erase(key) > 0;
     erased |= list_store.erase(key) > 0;
@@ -81,7 +88,10 @@ bool Database::del(const std::string& key) {
 
 bool Database::expire(const std::string& key, int seconds) {
     std::lock_guard<std::mutex> lock(db_mutex);
-    // purgeExpired();
+
+    if (isExpired(key)) {
+        return false;
+    }
     bool exist = (kv_store.find(key) != kv_store.end()) ||
                  (list_store.find(key) != list_store.end()) ||
                  (hash_store.find(key) != hash_store.end());
@@ -95,12 +105,33 @@ bool Database::expire(const std::string& key, int seconds) {
     return true;
 }
 
-void Database::purgeExpired() {}
+// Caller must hold db_mutex lock before calling
+bool Database::isExpired(const std::string& key) {
+    auto it = expiry_map.find(key);
+
+    if (it == expiry_map.end()) {
+        return false;
+    }
+    auto now = std::chrono::steady_clock::now();
+
+    if (now > it->second) {
+        kv_store.erase(key);
+        list_store.erase(key);
+        hash_store.erase(key);
+        expiry_map.erase(key);
+
+        return true;
+    }
+
+    return false;
+}
 
 bool Database::rename(const std::string& oldKey, const std::string& newKey) {
     std::lock_guard<std::mutex> lock(db_mutex);
 
-    // purgeExpired();
+    if (isExpired(oldKey)) {
+        return false;
+    }
     bool found = false;
 
     // find the old key and tranfer it values top the new key
@@ -137,6 +168,10 @@ bool Database::rename(const std::string& oldKey, const std::string& newKey) {
 // ---------------------list Operations---------------------
 ssize_t Database::llen(const std::string& key) {
     std::lock_guard<std::mutex> lock(db_mutex);
+
+    if (isExpired(key)) {
+        return 0;
+    }
     auto it = list_store.find(key);
     if (it != list_store.end()) {
         return it->second.size();
@@ -148,6 +183,10 @@ ssize_t Database::llen(const std::string& key) {
 std::vector<std::string> Database::lrange(const std::string& key, int start,
                                           int stop) {
     std::lock_guard<std::mutex> lock(db_mutex);
+
+    if (isExpired(key)) {
+        return {};
+    }
 
     auto it = list_store.find(key);
 
@@ -186,17 +225,25 @@ std::vector<std::string> Database::lrange(const std::string& key, int start,
 void Database::lpush(const std::string& key, const std::string& value) {
     std::lock_guard<std::mutex> lock(db_mutex);
 
+    isExpired(key);
+
     list_store[key].insert(list_store[key].begin(), value);
 }
 
 void Database::rpush(const std::string& key, const std::string& value) {
     std::lock_guard<std::mutex> lock(db_mutex);
 
+    isExpired(key);
+
     list_store[key].push_back(value);
 }
 
 bool Database::lpop(const std::string& key, std::string& value) {
     std::lock_guard<std::mutex> lock(db_mutex);
+
+    if (isExpired(key)) {
+        return false;
+    }
     auto it = list_store.find(key);
 
     if (it != list_store.end() && !it->second.empty()) {
@@ -209,6 +256,11 @@ bool Database::lpop(const std::string& key, std::string& value) {
 
 bool Database::rpop(const std::string& key, std::string& value) {
     std::lock_guard<std::mutex> lock(db_mutex);
+
+    if (isExpired(key)) {
+        return false;
+    }
+
     auto it = list_store.find(key);
 
     if (it != list_store.end() && !it->second.empty()) {
@@ -222,6 +274,10 @@ bool Database::rpop(const std::string& key, std::string& value) {
 int Database::lrem(const std::string& key, int count,
                    const std::string& value) {
     std::lock_guard<std::mutex> lock(db_mutex);
+
+    if (isExpired(key)) {
+        return 0;
+    }
 
     auto it = list_store.find(key);
 
@@ -263,7 +319,7 @@ int Database::lrem(const std::string& key, int count,
 
             if (list[i] == value) {
                 list.erase(list.begin() + i);
-                ++removed;
+                removed++;
             }
         }
     }
@@ -273,6 +329,11 @@ int Database::lrem(const std::string& key, int count,
 
 bool Database::lindex(const std::string& key, int index, std::string& value) {
     std::lock_guard<std::mutex> lock(db_mutex);
+
+    if (isExpired(key)) {
+        return false;
+    }
+
     auto it = list_store.find(key);
     if (it == list_store.end()) {
         return false;
@@ -294,6 +355,11 @@ bool Database::lindex(const std::string& key, int index, std::string& value) {
 bool Database::lset(const std::string& key, int index,
                     const std::string& value) {
     std::lock_guard<std::mutex> lock(db_mutex);
+
+    if (isExpired(key)) {
+        return false;
+    }
+
     auto it = list_store.find(key);
     if (it == list_store.end()) {
         return false;
@@ -313,16 +379,27 @@ bool Database::lset(const std::string& key, int index,
 }
 
 // ---------------------hash Operations---------------------
-bool Database::hset(const std::string& key, const std::string& field,
-                    const std::string& value) {
+
+// handles both HSET & HMSET since HMSET is deprecated from redis
+bool Database::hset(
+    const std::string& key,
+    const std::vector<std::pair<std::string, std::string>>& fieldValue) {
     std::lock_guard<std::mutex> lock(db_mutex);
-    hash_store[key][field] = value;
+    isExpired(key);
+
+    for (const auto& pair : fieldValue) {
+        hash_store[key][pair.first] = pair.second;
+    }
     return true;
 }
 
 bool Database::hget(const std::string& key, const std::string& field,
                     std::string& value) {
     std::lock_guard<std::mutex> lock(db_mutex);
+
+    if (isExpired(key)) {
+        return false;
+    }
 
     // find key in hash store
     auto hashIt = hash_store.find(key);
@@ -345,6 +422,11 @@ bool Database::hget(const std::string& key, const std::string& field,
 
 bool Database::hexists(const std::string& key, const std::string& field) {
     std::lock_guard<std::mutex> lock(db_mutex);
+
+    if (isExpired(key)) {
+        return false;
+    }
+
     auto it = hash_store.find(key);
 
     if (it == hash_store.end()) {
@@ -356,24 +438,85 @@ bool Database::hexists(const std::string& key, const std::string& field) {
 
 bool Database::hdel(const std::string& key, const std::string& field) {
     std::lock_guard<std::mutex> lock(db_mutex);
+
+    if (isExpired(key)) {
+        return false;
+    }
+
     auto it = hash_store.find(key);
     if (it != hash_store.end()) {
         return it->second.erase(field) > 0;
     }
+    return false;
 }
 
 std::unordered_map<std::string, std::string>
-Database::hgetall(const std::string& key) {}
+Database::hgetall(const std::string& key) {
+    std::lock_guard<std::mutex> lock(db_mutex);
 
-std::vector<std::string> Database::hkeys(const std::string& key) {}
+    if (isExpired(key)) {
+        return {};
+    }
 
-std::vector<std::string> Database::hvals(const std::string& key) {}
+    if (hash_store.find(key) != hash_store.end()) {
+        return hash_store[key];
+    }
+    return {};
+}
 
-ssize_t Database::hlen(const std::string& key) {}
+std::vector<std::string> Database::hkeys(const std::string& key) {
+    std::lock_guard<std::mutex> lock(db_mutex);
 
-bool Database::hmset(
-    const std::string& key,
-    const std::vector<std::pair<std::string, std::string>>& fieldValues) {}
+    if (isExpired(key)) {
+        return {};
+    }
+
+    auto hashIt = hash_store.find(key);
+    std::vector<std::string> result;
+
+    if (hashIt == hash_store.end()) {
+        return result;
+    }
+
+    for (const auto& pair : hashIt->second) {
+        result.push_back(pair.first);
+    }
+    return result;
+}
+
+std::vector<std::string> Database::hvals(const std::string& key) {
+    std::lock_guard<std::mutex> lock(db_mutex);
+
+    if (isExpired(key)) {
+        return {};
+    }
+    auto hashIt = hash_store.find(key);
+    std::vector<std::string> result;
+
+    if (hashIt == hash_store.end()) {
+        return result;
+    }
+
+    for (const auto& pair : hashIt->second) {
+        result.push_back(pair.second);
+    }
+    return result;
+}
+
+size_t Database::hlen(const std::string& key) {
+    std::lock_guard<std::mutex> lock(db_mutex);
+
+    if (isExpired(key)) {
+        return 0;
+    }
+    auto hashIt = hash_store.find(key);
+
+    if (hashIt != hash_store.end()) {
+        return hashIt->second.size();
+    }
+
+    return 0;
+}
 
 bool Database::dump(const std::string& filename) {
     std::lock_guard<std::mutex> lock(db_mutex);
