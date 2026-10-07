@@ -2,7 +2,7 @@ build/
 pocketdb
 
 test_parser
-database_test
+test_database
 
 dump.rdb
 

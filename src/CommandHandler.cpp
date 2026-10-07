@@ -3,6 +3,7 @@
 
 #include <cctype>
 #include <cstddef>
+#include <ostream>
 #include <sstream>
 #include <string>
 #include <sys/types.h>
@@ -29,7 +30,7 @@ std::vector<std::string> parseRespCommand(const std::string& input) {
         return tokens;
     }
 
-    // split by whitespace if it dosnt start with '*'
+    // Support simple whitespace-separated commands
     if (input[0] != '*') {
         std::istringstream iss(input);
         std::string token;
@@ -41,51 +42,57 @@ std::vector<std::string> parseRespCommand(const std::string& input) {
         return tokens;
     }
 
-    size_t pos = 0;
+    size_t pos = 1;
 
-    // parsing RESP array so expecting '*'
-    if (input[pos] != '*') {
-        return tokens;
-    }
+    try {
+        size_t lineEnd = input.find("\r\n", pos);
+        if (lineEnd == std::string::npos)
+            return {};
 
-    pos++; // move past '*'
+        int arrayLength = std::stoi(input.substr(pos, lineEnd - pos));
 
-    // Find the end of the array-length line
-    size_t lineEnd = input.find("\r\n", pos);
+        if (arrayLength <= 0)
+            return {};
 
-    if (lineEnd == std::string::npos) {
-        return tokens;
-    }
-
-    // Read number of elements, e.g. "*2\r\n" is 2
-    std::string countText = input.substr(pos, lineEnd - pos);
-    int numElements = std::stoi(countText);
-
-    // Move to the first RESP element
-    pos = lineEnd + 2;
-
-    for (int i = 0; i < numElements; i++) {
-        if (pos >= input.size() || input[pos] != '$') {
-            break;
-        }
-        pos++;
-
-        lineEnd = input.find("\r\n", pos);
-        if (lineEnd == std::string::npos) {
-            break;
-        }
-
-        int len = std::stoi(input.substr(pos, lineEnd - pos));
         pos = lineEnd + 2;
 
-        if (pos + len > input.size()) {
-            break;
+        for (int i = 0; i < arrayLength; i++) {
+            if (pos >= input.size() || input[pos] != '$')
+                return {};
+
+            pos++;
+
+            lineEnd = input.find("\r\n", pos);
+            if (lineEnd == std::string::npos)
+                return {};
+
+            int len = std::stoi(input.substr(pos, lineEnd - pos));
+
+            if (len < 0)
+                return {};
+
+            pos = lineEnd + 2;
+
+            size_t length = static_cast<size_t>(len);
+
+            if (length > input.size() - pos)
+                return {};
+
+            std::string token = input.substr(pos, length);
+            pos += length;
+
+            // Check for \r\n after the string
+            if (input.compare(pos, 2, "\r\n") != 0)
+                return {};
+
+            pos += 2;
+            tokens.push_back(token);
         }
 
-        std::string token = input.substr(pos, len);
-        tokens.push_back(token);
-        pos += len + 2;
+    } catch (const std::exception&) {
+        return {};
     }
+
     return tokens;
 }
 
@@ -201,23 +208,22 @@ static std::string handleDeleteOrUnlink(const std::vector<std::string>& tokens,
 }
 
 // expire command
+
 static std::string handleExpire(const std::vector<std::string>& tokens,
                                 Database& db) {
-    if (tokens.size() < 3) {
-        return "-Error: EXPIRE requires key and time in seconds\r\n";
+    if (tokens.size() != 3) {
+        return "-ERR EXPIRE requires key and time in seconds\r\n";
     }
 
     try {
         int seconds = std::stoi(tokens[2]);
 
-        if (db.expire(tokens[1], seconds)) {
-            return "+OK\r\n";
-        }
+        bool result = db.expire(tokens[1], seconds);
 
-        return "-Error: Key not found\r\n";
+        return ":" + std::to_string(result ? 1 : 0) + "\r\n";
 
     } catch (const std::exception&) {
-        return "-Error: Invalid expiration time\r\n";
+        return "-ERR Invalid expiration time\r\n";
     }
 }
 
@@ -398,7 +404,9 @@ static std::string handleHset(const std::vector<std::string>& tokens,
         return "-Error: HSET requires key, field and value\r\n";
     }
 
-    db.hset(tokens[1], {{tokens[2], tokens[3]}});
+    for (size_t i = 2; i < tokens.size(); i += 2) {
+        db.hset(tokens[1], {{tokens[i], tokens[i + 1]}});
+    }
     return ":1\r\n";
 }
 
@@ -433,19 +441,59 @@ static std::string handleHdel(const std::vector<std::string>& tokens,
 }
 
 static std::string handleHgetall(const std::vector<std::string>& tokens,
-                                 Database& db) {}
+                                 Database& db) {
+
+    if (tokens.size() < 2) {
+        return "-Error: HGETALL requires key\r\n";
+    }
+    auto field_value = db.hgetall(tokens[1]);
+
+    std::ostringstream oss;
+    oss << "*" << field_value.size() * 2 << "\r\n";
+    for (const auto& pair : field_value) {
+        oss << "$" << pair.first.size() << "\r\n" << pair.first << "\r\n";
+        oss << "$" << pair.second.size() << "\r\n" << pair.second << "\r\n";
+    }
+    return oss.str();
+}
 
 static std::string handleHkeys(const std::vector<std::string>& tokens,
-                               Database& db) {}
+                               Database& db) {
+    if (tokens.size() < 2) {
+        return "-Error: HKEYS requires key\r\n";
+    }
+    auto fields = db.hkeys(tokens[1]);
+    std::ostringstream oss;
+    oss << "*" << fields.size() << "\r\n";
+    for (const auto& field : fields) {
+        oss << "$" << field.size() << "\r\n" << field << "\r\n";
+    }
+    return oss.str();
+}
 
 static std::string handleHvals(const std::vector<std::string>& tokens,
-                               Database& db) {}
+                               Database& db) {
+
+    if (tokens.size() < 2) {
+        return "-Error: HVALS requires key\r\n";
+    }
+    auto values = db.hvals(tokens[1]);
+    std::ostringstream oss;
+    oss << "*" << values.size() << "\r\n";
+    for (const auto& value : values) {
+        oss << "$" << value.size() << "\r\n" << value << "\r\n";
+    }
+    return oss.str();
+}
 
 static std::string handleHlen(const std::vector<std::string>& tokens,
-                              Database& db) {}
-
-static std::string handleHmset(const std::vector<std::string>& tokens,
-                               Database& db) {}
+                              Database& db) {
+    if (tokens.size() < 2) {
+        return "-Error: HLEN requires key\r\n";
+    }
+    ssize_t len = db.hlen(tokens[1]);
+    return ":" + std::to_string(len) + "\r\n";
+}
 
 std::string CommandHandler::processCommand(const std::string& commandLine) {
     auto tokens = parseRespCommand(commandLine);
@@ -517,8 +565,6 @@ std::string CommandHandler::processCommand(const std::string& commandLine) {
         return handleHvals(tokens, db);
     } else if (cmd == "HLEN") {
         return handleHlen(tokens, db);
-    } else if (cmd == "HMSET") {
-        return handleHmset(tokens, db);
     } else {
         return "-Error: Unknown command\r\n";
     }
