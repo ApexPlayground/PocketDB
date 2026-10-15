@@ -16,7 +16,7 @@ Database& Database::getInstance() {
 
 // Common Comands
 bool Database::flushAll() {
-    std::lock_guard<std::mutex> lock(db_mutex);
+    std::unique_lock<std::shared_mutex> lock(db_mutex);
     kv_store.clear();
     list_store.clear();
     hash_store.clear();
@@ -25,12 +25,12 @@ bool Database::flushAll() {
 
 // ---------------------Key/Value Operations---------------------
 void Database::set(const std::string& key, const std::string& value) {
-    std::lock_guard<std::mutex> lock(db_mutex);
+    std::unique_lock<std::shared_mutex> lock(db_mutex);
     kv_store[key] = value;
 }
 
 bool Database::get(const std::string& key, std::string& value) {
-    std::lock_guard<std::mutex> lock(db_mutex);
+    std::shared_lock<std::shared_mutex> lock(db_mutex);
     if (isExpired(key)) {
         return false;
     }
@@ -43,7 +43,7 @@ bool Database::get(const std::string& key, std::string& value) {
 }
 
 std::vector<std::string> Database::keys() {
-    std::lock_guard<std::mutex> lock(db_mutex);
+    std::shared_lock<std::shared_mutex> lock(db_mutex);
     std::vector<std::string> result;
 
     for (const auto& pair : kv_store) {
@@ -60,7 +60,7 @@ std::vector<std::string> Database::keys() {
 }
 
 std::string Database::type(const std::string& key) {
-    std::lock_guard<std::mutex> lock(db_mutex);
+    std::shared_lock<std::shared_mutex> lock(db_mutex);
     if (isExpired(key)) {
         return "none";
     }
@@ -75,7 +75,7 @@ std::string Database::type(const std::string& key) {
 }
 
 bool Database::del(const std::string& key) {
-    std::lock_guard<std::mutex> lock(db_mutex);
+    std::unique_lock<std::shared_mutex> lock(db_mutex);
     if (isExpired(key)) {
         return false;
     }
@@ -87,7 +87,7 @@ bool Database::del(const std::string& key) {
 }
 
 bool Database::expire(const std::string& key, int seconds) {
-    std::lock_guard<std::mutex> lock(db_mutex);
+    std::unique_lock<std::shared_mutex> lock(db_mutex);
 
     if (isExpired(key)) {
         return false;
@@ -127,7 +127,7 @@ bool Database::isExpired(const std::string& key) {
 }
 
 bool Database::rename(const std::string& oldKey, const std::string& newKey) {
-    std::lock_guard<std::mutex> lock(db_mutex);
+    std::unique_lock<std::shared_mutex> lock(db_mutex);
 
     if (isExpired(oldKey)) {
         return false;
@@ -167,7 +167,7 @@ bool Database::rename(const std::string& oldKey, const std::string& newKey) {
 
 // ---------------------list Operations---------------------
 ssize_t Database::llen(const std::string& key) {
-    std::lock_guard<std::mutex> lock(db_mutex);
+    std::shared_lock<std::shared_mutex> lock(db_mutex);
 
     if (isExpired(key)) {
         return 0;
@@ -182,7 +182,7 @@ ssize_t Database::llen(const std::string& key) {
 
 std::vector<std::string> Database::lrange(const std::string& key, int start,
                                           int stop) {
-    std::lock_guard<std::mutex> lock(db_mutex);
+    std::shared_lock<std::shared_mutex> lock(db_mutex);
 
     if (isExpired(key)) {
         return {};
@@ -223,7 +223,7 @@ std::vector<std::string> Database::lrange(const std::string& key, int start,
 }
 
 void Database::lpush(const std::string& key, const std::string& value) {
-    std::lock_guard<std::mutex> lock(db_mutex);
+    std::unique_lock<std::shared_mutex> lock(db_mutex);
 
     isExpired(key);
 
@@ -231,7 +231,7 @@ void Database::lpush(const std::string& key, const std::string& value) {
 }
 
 void Database::rpush(const std::string& key, const std::string& value) {
-    std::lock_guard<std::mutex> lock(db_mutex);
+    std::unique_lock<std::shared_mutex> lock(db_mutex);
 
     isExpired(key);
 
@@ -239,7 +239,7 @@ void Database::rpush(const std::string& key, const std::string& value) {
 }
 
 bool Database::lpop(const std::string& key, std::string& value) {
-    std::lock_guard<std::mutex> lock(db_mutex);
+    std::unique_lock<std::shared_mutex> lock(db_mutex);
 
     if (isExpired(key)) {
         return false;
@@ -255,7 +255,7 @@ bool Database::lpop(const std::string& key, std::string& value) {
 }
 
 bool Database::rpop(const std::string& key, std::string& value) {
-    std::lock_guard<std::mutex> lock(db_mutex);
+    std::unique_lock<std::shared_mutex> lock(db_mutex);
 
     if (isExpired(key)) {
         return false;
@@ -273,7 +273,7 @@ bool Database::rpop(const std::string& key, std::string& value) {
 
 int Database::lrem(const std::string& key, int count,
                    const std::string& value) {
-    std::lock_guard<std::mutex> lock(db_mutex);
+    std::unique_lock<std::shared_mutex> lock(db_mutex);
 
     if (isExpired(key)) {
         return 0;
@@ -328,7 +328,7 @@ int Database::lrem(const std::string& key, int count,
 }
 
 bool Database::lindex(const std::string& key, int index, std::string& value) {
-    std::lock_guard<std::mutex> lock(db_mutex);
+    std::shared_lock<std::shared_mutex> lock(db_mutex);
 
     if (isExpired(key)) {
         return false;
@@ -354,7 +354,7 @@ bool Database::lindex(const std::string& key, int index, std::string& value) {
 
 bool Database::lset(const std::string& key, int index,
                     const std::string& value) {
-    std::lock_guard<std::mutex> lock(db_mutex);
+    std::unique_lock<std::shared_mutex> lock(db_mutex);
 
     if (isExpired(key)) {
         return false;
@@ -384,7 +384,7 @@ bool Database::lset(const std::string& key, int index,
 bool Database::hset(
     const std::string& key,
     const std::vector<std::pair<std::string, std::string>>& fieldValue) {
-    std::lock_guard<std::mutex> lock(db_mutex);
+    std::unique_lock<std::shared_mutex> lock(db_mutex);
     isExpired(key);
 
     for (const auto& pair : fieldValue) {
@@ -395,7 +395,7 @@ bool Database::hset(
 
 bool Database::hget(const std::string& key, const std::string& field,
                     std::string& value) {
-    std::lock_guard<std::mutex> lock(db_mutex);
+    std::shared_lock<std::shared_mutex> lock(db_mutex);
 
     if (isExpired(key)) {
         return false;
@@ -421,7 +421,7 @@ bool Database::hget(const std::string& key, const std::string& field,
 }
 
 bool Database::hexists(const std::string& key, const std::string& field) {
-    std::lock_guard<std::mutex> lock(db_mutex);
+    std::shared_lock<std::shared_mutex> lock(db_mutex);
 
     if (isExpired(key)) {
         return false;
@@ -437,7 +437,7 @@ bool Database::hexists(const std::string& key, const std::string& field) {
 }
 
 bool Database::hdel(const std::string& key, const std::string& field) {
-    std::lock_guard<std::mutex> lock(db_mutex);
+    std::unique_lock<std::shared_mutex> lock(db_mutex);
 
     if (isExpired(key)) {
         return false;
@@ -452,7 +452,7 @@ bool Database::hdel(const std::string& key, const std::string& field) {
 
 std::unordered_map<std::string, std::string>
 Database::hgetall(const std::string& key) {
-    std::lock_guard<std::mutex> lock(db_mutex);
+    std::shared_lock<std::shared_mutex> lock(db_mutex);
 
     if (isExpired(key)) {
         return {};
@@ -465,7 +465,7 @@ Database::hgetall(const std::string& key) {
 }
 
 std::vector<std::string> Database::hkeys(const std::string& key) {
-    std::lock_guard<std::mutex> lock(db_mutex);
+    std::shared_lock<std::shared_mutex> lock(db_mutex);
 
     if (isExpired(key)) {
         return {};
@@ -485,7 +485,7 @@ std::vector<std::string> Database::hkeys(const std::string& key) {
 }
 
 std::vector<std::string> Database::hvals(const std::string& key) {
-    std::lock_guard<std::mutex> lock(db_mutex);
+    std::shared_lock<std::shared_mutex> lock(db_mutex);
 
     if (isExpired(key)) {
         return {};
@@ -504,7 +504,7 @@ std::vector<std::string> Database::hvals(const std::string& key) {
 }
 
 size_t Database::hlen(const std::string& key) {
-    std::lock_guard<std::mutex> lock(db_mutex);
+    std::shared_lock<std::shared_mutex> lock(db_mutex);
 
     if (isExpired(key)) {
         return 0;
@@ -519,7 +519,7 @@ size_t Database::hlen(const std::string& key) {
 }
 
 bool Database::dump(const std::string& filename) {
-    std::lock_guard<std::mutex> lock(db_mutex);
+    std::unique_lock<std::shared_mutex> lock(db_mutex);
 
     std::ofstream ofs(filename);
 
@@ -560,7 +560,7 @@ bool Database::dump(const std::string& filename) {
 }
 
 bool Database::load(const std::string& filename) {
-    std::lock_guard<std::mutex> lock(db_mutex);
+    std::shared_lock<std::shared_mutex> lock(db_mutex);
 
     std::ifstream ifs(filename);
 

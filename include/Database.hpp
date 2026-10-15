@@ -1,5 +1,6 @@
 #include <chrono>
 #include <mutex>
+#include <shared_mutex>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -57,7 +58,7 @@ class Database {
 
     Database(const Database&) = delete;
     Database& operator=(const Database&) = delete;
-    std::mutex db_mutex;
+    std::shared_mutex db_mutex;
 
     std::unordered_map<std::string, std::string> kv_store;
     std::unordered_map<std::string, std::vector<std::string>> list_store;
